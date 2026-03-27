@@ -2,6 +2,15 @@
 
 GitHub PR を 5 つの専門家視点（Principal Engineer / PM / Staff Engineer / 要求工学 / Security）から並列レビューし、引用ファーストのハルシネーション抑制設計で統合レポートを生成する Claude Code Skill。
 
+## インストール
+
+Claude Code の Plugin Marketplace 経由でインストールします。
+
+```
+/plugin marketplace add maro114510/pr-review
+/plugin install pr-review@maro114510-pr-review
+```
+
 ## 必要なもの
 
 - [GitHub CLI (`gh`)](https://cli.github.com/) がインストール・認証済み
