@@ -30,7 +30,9 @@ files_info = diff_index.get("files", {})
 # バッククォート囲み `file/path.ext:NNN` と裸の file/path.ext:NNN の両形式を検出
 # 拡張子を含むパスのみ対象（単純な数値だけのケースを除外）
 CITATION_RE_BT    = re.compile(r'`([^`\s]+\.[^`\s:]+):(\d+)`')
-CITATION_RE_PLAIN = re.compile(r'(?<![`\w])([a-zA-Z][\w./\-]*\.[a-zA-Z]{1,10}):(\d+)(?![`\w])')
+# URL パス内のホスト名 (例: https://pkg.go.dev/net/http.go:443) を誤検出しないよう
+# 先行文字に / を追加。URL スキームの直後 (://) も除外される
+CITATION_RE_PLAIN = re.compile(r'(?<![`\w/])([a-zA-Z][\w./\-]*\.[a-zA-Z]{1,10}):(\d+)(?![`\w/])')
 
 issues   = []
 warnings = []

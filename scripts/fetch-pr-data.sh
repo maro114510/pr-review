@@ -30,7 +30,11 @@ echo "  変更ファイル: ${FILE_COUNT} 件" >&2
 # 3. raw diff（行数制限付き）
 echo "[3/4] diff 取得..." >&2
 DIFF_CONTENT=$(gh pr diff "$PR_NUMBER" 2>/dev/null || echo "")
-DIFF_LINES=$(echo "$DIFF_CONTENT" | wc -l | tr -d ' ')
+if [ -z "$DIFF_CONTENT" ]; then
+  DIFF_LINES=0
+else
+  DIFF_LINES=$(printf '%s\n' "$DIFF_CONTENT" | wc -l | tr -d ' ')
+fi
 
 if [ "$DIFF_LINES" -gt 8000 ]; then
   echo "$DIFF_CONTENT" | head -8000 > "$OUT_DIR/diff-raw.txt"
