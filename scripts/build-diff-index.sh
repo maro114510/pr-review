@@ -24,22 +24,29 @@ with open(file_list_path) as f:
 diff_index = {"files": {}}
 for f in api_files:
     diff_index["files"][f["filename"]] = {
-        "status": f["status"],   # added / modified / deleted / renamed / copied
-        "in_diff": False,        # diff-raw.txt に当該ファイルの diff が含まれているか
-        "truncated": False,      # 大規模diff 切り捨てにより diff が不完全か
-        "changed_ranges": []     # [[new_file_start, new_file_end], ...]
+        "status": f["status"],       # added / modified / deleted / renamed / copied
+        "in_diff": False,            # diff-raw.txt に当該ファイルの diff が含まれているか
+        "truncated": False,          # 大規模diff 切り捨てにより diff が不完全か
+        "diff_line_start": None,     # diff-raw.txt におけるこのファイルのセクション開始行（絶対行番号）
+        "diff_line_end": None,       # diff-raw.txt におけるこのファイルのセクション終了行（絶対行番号）
     }
 
-# diff-raw.txt をパースして hunk ごとの変更行範囲を抽出
-# hunk header: @@ -old_start[,old_count] +new_start[,new_count] @@
-# new_start / new_count は新ファイルでの行番号ベース
+# diff-raw.txt をパースして各ファイルの絶対行範囲を記録する
+# サブエージェントは diff-raw.txt の行番号をそのまま引用するため、
+# ファイル相対行番号ではなく diff-raw.txt 内の絶対行番号で検証する
 current_file = None
+current_abs_line = 0
 with open(diff_file, encoding="utf-8", errors="replace") as f:
     for line in f:
+        current_abs_line += 1
         line = line.rstrip("\n")
 
         m = re.match(r"^diff --git a/.+ b/(.+)$", line)
         if m:
+            # 直前ファイルの終了行を確定
+            if current_file and diff_index["files"][current_file].get("diff_line_start") is not None:
+                diff_index["files"][current_file]["diff_line_end"] = current_abs_line - 1
+
             current_file = m.group(1)
             if current_file not in diff_index["files"]:
                 # GitHub API リストにないファイル（リネーム等で稀に発生）
@@ -47,21 +54,16 @@ with open(diff_file, encoding="utf-8", errors="replace") as f:
                     "status": "unknown",
                     "in_diff": True,
                     "truncated": False,
-                    "changed_ranges": []
+                    "diff_line_start": None,
+                    "diff_line_end": None,
                 }
             diff_index["files"][current_file]["in_diff"] = True
+            diff_index["files"][current_file]["diff_line_start"] = current_abs_line
             continue
 
-        m = re.match(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", line)
-        if m and current_file:
-            new_start = int(m.group(1))
-            # カウントが省略されている場合は 1 行
-            new_count = int(m.group(2)) if m.group(2) is not None else 1
-            if new_count > 0:
-                diff_index["files"][current_file]["changed_ranges"].append(
-                    [new_start, new_start + new_count - 1]
-                )
-            continue
+# 最後のファイルの終了行を確定
+if current_file and diff_index["files"][current_file].get("diff_line_start") is not None:
+    diff_index["files"][current_file]["diff_line_end"] = current_abs_line
 
 # diff が切り捨てられた場合、diff に含まれないファイルを truncated とマーク
 if os.path.exists(os.path.join(out_dir, ".truncated")):

@@ -84,17 +84,20 @@ for filename, line_num in citations:
     if info.get("status") == "deleted":
         continue
 
-    # 行番号が hunk の変更範囲内にあるか確認
-    # changed_ranges は新ファイルの行番号範囲（コンテキスト行を含む）
-    ranges = info.get("changed_ranges", [])
-    if ranges:
-        in_range = any(start <= line_num <= end for start, end in ranges)
-        if not in_range:
-            warnings.append({
+    # 行番号が diff-raw.txt 内の当該ファイルのセクション範囲内にあるか確認
+    # line_num は diff-raw.txt の絶対行番号（ファイル内行番号ではない）
+    diff_start = info.get("diff_line_start")
+    diff_end   = info.get("diff_line_end")
+    if diff_start is not None and diff_end is not None:
+        if not (diff_start <= line_num <= diff_end):
+            issues.append({
                 "reviewer": persona,
                 "citation": f"{filename}:{line_num}",
-                "type": "LINE_OUT_OF_CHANGED_RANGE",
-                "detail": f"行 {line_num} は変更 hunk の範囲外です（変更範囲: {ranges}）"
+                "type": "LINE_OUT_OF_DIFF_RANGE",
+                "detail": (
+                    f"行 {line_num} は {filename} の diff セクション範囲外です"
+                    f"（diff-raw.txt 内の範囲: {diff_start}〜{diff_end}）"
+                )
             })
 
 # citation-check.json に追記（複数ペルソナの結果を蓄積）
