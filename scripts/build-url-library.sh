@@ -18,7 +18,7 @@ out_path   = os.path.join(out_dir, "url-library.json")
 
 # プリセット URL ライブラリ
 # - スタックごとに主要な公式ドキュメント・標準を列挙
-# - 記憶ではなくこのリストから選ぶことでハレーションを排除
+# - 記憶ではなくこのリストから選ぶことでハルシネーションを排除
 PRESET = {
     "security": {
         "OWASP Top 10 (2021)": "https://owasp.org/Top10/",

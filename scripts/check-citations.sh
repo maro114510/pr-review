@@ -4,7 +4,7 @@
 # Usage: check-citations.sh <レビュー出力ファイル> <ペルソナ名> <出力ディレクトリ>
 #
 # 結果は <出力ディレクトリ>/citation-check.json に追記（複数ペルソナ分が蓄積される）
-# issues: ハレーション確定（削除推奨）
+# issues: ハルシネーション確定（削除推奨）
 # warnings: 切り捨て等で検証不能（要注意）
 set -euo pipefail
 
