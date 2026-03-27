@@ -1,0 +1,12 @@
+{
+  "name": "pr-review",
+  "description": "Review GitHub PRs from 5 specialist perspectives (PE, PM, Staff Engineer, Requirements Engineering, Security) in parallel using subagents, producing a structured Markdown report with hallucination-resistant citations.",
+  "version": "1.0.0",
+  "author": {
+    "name": "maro114510",
+    "email": "atsuki.nohira@stelzen.dev"
+  },
+  "repository": "https://github.com/maro114510/pr-review",
+  "license": "MIT",
+  "keywords": ["code-review", "pull-request", "github", "security", "hallucination-resistant"]
+}
