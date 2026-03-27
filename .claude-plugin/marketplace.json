@@ -1,0 +1,14 @@
+{
+  "name": "maro114510-pr-review",
+  "owner": {
+    "name": "maro114510",
+    "email": "atsuki.nohira@stelzen.dev"
+  },
+  "plugins": [
+    {
+      "name": "pr-review",
+      "source": ".",
+      "description": "Review GitHub PRs from 5 specialist perspectives (PE, PM, Staff Engineer, Requirements Engineering, Security) in parallel using subagents, producing a structured Markdown report with hallucination-resistant citations."
+    }
+  ]
+}
