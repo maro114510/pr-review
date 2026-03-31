@@ -1,0 +1,5 @@
+pre-commit:
+  commands:
+    shellcheck:
+      glob: "scripts/*.sh"
+      run: shellcheck --severity=warning {staged_files}
