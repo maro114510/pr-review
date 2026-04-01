@@ -15,6 +15,12 @@ Claude Code の Plugin Marketplace 経由でインストールします。
 
 - [GitHub CLI (`gh`)](https://cli.github.com/) がインストール・認証済み
 - Python 3（標準ライブラリのみ使用）
+- [lefthook](https://github.com/evilmartians/lefthook)（pre-commit フックで ShellCheck を実行するために必要）
+
+  ```bash
+  brew install lefthook  # 未インストールの場合
+  lefthook install       # リポジトリで一度だけ実行
+  ```
 
 ## 使い方
 
