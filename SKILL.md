@@ -10,9 +10,10 @@ allowed-tools: Bash, Read, Agent, WebFetch
 argument-hint: "<PR# or URL>"
 ---
 
-# pr-review — 5視点並列PRレビュー
+# pr-review — 分類連動型並列PRレビュー
 
-GitHub PRを5つの専門家ペルソナが並列でレビューし、スクリプトによるファクトチェックを経た統合レポートを生成する。
+GitHub PRを専門家ペルソナが並列でレビューし、スクリプトによるファクトチェックを経た統合レポートを生成する。
+PR の種別（実装系 / ドキュメント系）を自動判定してレビュアーを選別するため、不要な視点のノイズが入らない。
 
 ## ハルシネーション防止の設計原則
 
@@ -67,15 +68,50 @@ bash <SCRIPTS>/build-url-library.sh <DATA_DIR>
 
 ---
 
-## ステップ 3: レビュアーペルソナ読み込み
+## ステップ 3: PR 分類
 
-各サブエージェントが自身のペルソナファイルを独立して Read する設計のため、親エージェントはこのステップでペルソナを読み込まない。ステップ4のプロンプトテンプレートに従ってサブエージェントに読み込みを委譲する。
+```bash
+bash <SCRIPTS>/classify-pr.sh <DATA_DIR>
+```
+
+`<DATA_DIR>/classification.json` を Read ツールで読み込み、`type` と `agents` を確認する。
+
+### 分類ルール
+
+| 分類 | 条件 | 起動ペルソナ |
+|------|------|-------------|
+| `docs` | 変更ファイルが**すべて**ドキュメント系（`.md` / `.txt` / `.rst` / `.adoc` / `docs/` / `README*` / `CHANGELOG*` / `LICENSE*` / `CONTRIBUTING*`） | PM / REQ / Security（3視点） |
+| `implementation` | それ以外（コード・テスト・設定・CI・インフラを1ファイルでも含む） | PE / PM / Staff / REQ / Security（5視点） |
+
+> **注意**: Security は PR 種別に関わらず常に起動する（ドキュメント系PRでも credential / PII 混入リスクがあるため）。
+
+`classification.json` の構造:
+```json
+{
+  "type": "docs | implementation",
+  "agents": ["起動するペルソナ名の配列"],
+  "stats": { "total_files": N, "doc_files": N }
+}
+```
+
+以降のステップでは `agents` 配列を参照して起動・確認・検証の対象を決定する。
 
 ---
 
-## ステップ 4: 5サブエージェント完全並列起動
+## ステップ 4: レビュアーペルソナ読み込み
 
-**以下の5つのAgentツール呼び出しを同一ターンで同時に発行する。** 順番に実行してはならない。
+各サブエージェントが自身のペルソナファイルを独立して Read する設計のため、親エージェントはこのステップでペルソナを読み込まない。ステップ5のプロンプトテンプレートに従ってサブエージェントに読み込みを委譲する。
+
+---
+
+## ステップ 5: 分類結果に基づくサブエージェント並列起動
+
+**ステップ 3 で読み込んだ `classification.json` の `agents` 配列に含まれるペルソナのみを対象に、Agent ツール呼び出しを同一ターンで同時に発行する。**
+
+- `type = "implementation"` → **pe / pm / staff / req / security** の5つを同時発行
+- `type = "docs"` → **pm / req / security** の3つを同時発行
+
+順番に実行してはならない。
 
 各サブエージェントに渡すプロンプトは次のテンプレートで構築する（`<DATA_DIR>` と `<PERSONA_FILE>` を実際の値に置換すること。`<PERSONA_FILE>` は各ペルソナのファイルパス: `${CLAUDE_SKILL_DIR}/references/pe.md` / `pm.md` / `staff.md` / `req.md` / `security.md` のいずれか）:
 
@@ -152,14 +188,15 @@ comments.txt を確認し、以下のルールに従うこと:
 
 各ペルソナファイルの内容をそのままプロンプトに埋め込む。
 
-> **重要**: 5つのAgentツール呼び出しは必ず同時に発行すること。
+> **重要**: Agent ツール呼び出しは `classification.json` の `agents` 配列に含まれるペルソナ分をすべて同時に発行すること。
 
 ---
 
-## ステップ 5: 全エージェント完了待機・結果確認
+## ステップ 6: 全エージェント完了待機・結果確認
 
-5つのエージェントがすべて完了するまで待機する。各エージェントは Write ツールで結果を自動保存済みのため、以下のファイルが存在することを確認する:
+起動したエージェントがすべて完了するまで待機する。各エージェントは Write ツールで結果を自動保存済みのため、**`classification.json` の `agents` に含まれるペルソナのレビューファイルのみ**存在を確認する。
 
+`type = "implementation"` の場合:
 ```bash
 ls <DATA_DIR>/review-pe.txt \
    <DATA_DIR>/review-pm.txt \
@@ -168,18 +205,33 @@ ls <DATA_DIR>/review-pe.txt \
    <DATA_DIR>/review-security.txt
 ```
 
+`type = "docs"` の場合:
+```bash
+ls <DATA_DIR>/review-pm.txt \
+   <DATA_DIR>/review-req.txt \
+   <DATA_DIR>/review-security.txt
+```
+
 いずれかのファイルが欠けている場合はユーザーにエラーを報告し、処理を停止する。
 
 ---
 
-## ステップ 6: スクリプトによる引用検証
+## ステップ 7: スクリプトによる引用検証
 
-5つのレビュー結果に対して `check-citations.sh` を実行する:
+**`classification.json` の `agents` に含まれるペルソナ分のみ** `check-citations.sh` を実行する:
 
+`type = "implementation"` の場合:
 ```bash
 bash <SCRIPTS>/check-citations.sh <DATA_DIR>/review-pe.txt     pe       <DATA_DIR>
 bash <SCRIPTS>/check-citations.sh <DATA_DIR>/review-pm.txt     pm       <DATA_DIR>
 bash <SCRIPTS>/check-citations.sh <DATA_DIR>/review-staff.txt  staff    <DATA_DIR>
+bash <SCRIPTS>/check-citations.sh <DATA_DIR>/review-req.txt    req      <DATA_DIR>
+bash <SCRIPTS>/check-citations.sh <DATA_DIR>/review-security.txt security <DATA_DIR>
+```
+
+`type = "docs"` の場合:
+```bash
+bash <SCRIPTS>/check-citations.sh <DATA_DIR>/review-pm.txt     pm       <DATA_DIR>
 bash <SCRIPTS>/check-citations.sh <DATA_DIR>/review-req.txt    req      <DATA_DIR>
 bash <SCRIPTS>/check-citations.sh <DATA_DIR>/review-security.txt security <DATA_DIR>
 ```
@@ -192,9 +244,9 @@ bash <SCRIPTS>/check-citations.sh <DATA_DIR>/review-security.txt security <DATA_
 
 ---
 
-## ステップ 7: 一次フィルタリング（妥当性確認）
+## ステップ 8: 一次フィルタリング（妥当性確認）
 
-5つの結果とcitation-check.json を俯瞰し、以下の観点で調整する:
+起動したペルソナの結果と citation-check.json を俯瞰し、以下の観点で調整する:
 
 **除外すべき指摘（ノイズ）:**
 - 汎用的すぎて具体性がない（例: 「セキュリティを考慮してください」のみ）
@@ -208,15 +260,21 @@ bash <SCRIPTS>/check-citations.sh <DATA_DIR>/review-security.txt security <DATA_
 
 ---
 
-## ステップ 8: 統合レポート生成・出力
+## ステップ 9: 統合レポート生成・出力
 
-ステップ 6・7 の結果を適用してから、以下の構造でMarkdownレポートを生成し端末に出力する:
+ステップ 7・8 の結果を適用してから、以下の構造でMarkdownレポートを生成し端末に出力する。
+**`classification.json` の `type` に応じてセクションを切り替えること。**
+
+---
+
+### `type = "implementation"` のレポート構造
 
 ```markdown
 # PR Review Report
 
 ## #<番号> <タイトル>
 **著者**: <author> | **ベース**: <baseRefName> ← <headRefName> | **状態**: <state>
+**レビュー分類**: implementation（5視点: PE / PM / SE / REQ / SEC）
 
 ---
 
@@ -287,7 +345,73 @@ bash <SCRIPTS>/check-citations.sh <DATA_DIR>/review-security.txt security <DATA_
 
 ---
 
-## ステップ 9: クリーンアップ（任意）
+### `type = "docs"` のレポート構造
+
+```markdown
+# PR Review Report
+
+## #<番号> <タイトル>
+**著者**: <author> | **ベース**: <baseRefName> ← <headRefName> | **状態**: <state>
+**レビュー分類**: docs（3視点: PM / REQ / SEC）
+
+---
+
+## Executive Summary
+
+> （3視点全体を踏まえた総評。[must]が存在するかどうかを明示する）
+
+---
+
+## [must] 修正必須項目（全視点集約）
+
+> ※ このセクションの項目がすべて解消されるまでApproveを推奨しない
+
+| # | 視点 | 概要 | 参照 |
+|---|------|------|------|
+
+---
+
+## [ask] 確認必須項目（全視点集約）
+
+| # | 視点 | 概要 |
+|---|------|------|
+
+---
+
+## PM レビュー
+<RESULT_PM の内容>
+
+---
+
+## Requirements Engineering レビュー
+<RESULT_REQ の内容>
+
+---
+
+## Security レビュー
+<RESULT_SEC の内容>
+
+---
+
+## [good] 良い点（全視点集約）
+
+---
+
+## レビュー統計
+
+| 視点 | [must] | [ask] | [imo] | [nits] | [next] | [good] | [suggestion] |
+|------|--------|-------|-------|--------|--------|--------|--------------|
+| PM   | N      | N     | N     | N      | N      | N      | N            |
+| REQ  | N      | N     | N     | N      | N      | N      | N            |
+| SEC  | N      | N     | N     | N      | N      | N      | N            |
+| **計** | **N** | **N** | **N** | **N** | **N** | **N** | **N**        |
+
+> スクリプト検証により除外: N件 / 検証注意: N件
+```
+
+---
+
+## ステップ 10: クリーンアップ（任意）
 
 レポート出力後、削除前にユーザーに確認する:
 
